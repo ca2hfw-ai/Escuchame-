@@ -785,6 +785,8 @@ let fontSize     = 20;
 let interimEl    = null;
 let waveInterval = null;
 let transcriptLog = []; // {speaker, text, time}
+let lastFinalIndex = -1; // tracks last processed final result to avoid duplicates
+let lastCommittedText = ''; // tracks last committed text to avoid exact duplicates
 
 const SPEAKER_COLORS = [
   { css: 'var(--accent2)', hex: '#8b84ff', name: 'Persona 1' },
@@ -861,6 +863,7 @@ function startRecording() {
   };
 
   recognition.onend = () => {
+    lastFinalIndex = -1; // reset on each new recognition session
     if (isListening) {
       try { recognition.start(); } catch(e) {}
     } else {
@@ -882,7 +885,15 @@ function startRecording() {
     for (let i = e.resultIndex; i < e.results.length; i++) {
       const res = e.results[i];
       if (res.isFinal) {
-        commitBubble(res[0].transcript.trim());
+        // Only process if we haven't already processed this result index
+        if (i > lastFinalIndex) {
+          lastFinalIndex = i;
+          const text = res[0].transcript.trim();
+          // Also check it's not an exact duplicate of the last committed text
+          if (text && text !== lastCommittedText) {
+            commitBubble(text);
+          }
+        }
         interim = '';
       } else {
         interim += res[0].transcript;
@@ -935,6 +946,7 @@ function showInterim(text) {
 
 function commitBubble(text) {
   if (!text) return;
+  lastCommittedText = text;
   const area = document.getElementById('transcriptArea');
   if (interimEl) { interimEl.remove(); interimEl = null; }
 
@@ -1023,6 +1035,8 @@ function saveAndClear() {
   }
   transcriptLog = [];
   interimEl = null;
+  lastFinalIndex = -1;
+  lastCommittedText = '';
   const area = document.getElementById('transcriptArea');
   area.innerHTML = `<div class="empty-state" id="emptyState">
     <div class="empty-icon">👋</div>
